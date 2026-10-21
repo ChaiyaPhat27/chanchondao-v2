@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ชานชมดาว - ระบบบัญชี ATV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@100;300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body { font-family: 'Anuphan', sans-serif; background-color: #f8fafc; color: #0f172a; overflow-x: hidden; }
+        .sidebar { height: 100vh; position: fixed; left: 0; top: 0; width: 260px; background: white; border-right: 1px solid #f1f5f9; z-index: 50; transform: translateX(-100%); transition: transform 0.3s ease; }
+        .sidebar.open { transform: translateX(0); }
+        .mobile-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .mobile-overlay.open { opacity: 1; pointer-events: auto; }
+        .main-content { min-height: 100vh; padding: 1rem; transition: margin 0.3s ease; width: 100%; }
+        @media (min-width: 1024px) { .sidebar { transform: translateX(0); } .main-content { margin-left: 260px; width: calc(100% - 260px); padding: 2rem; } .mobile-overlay { display: none !important; } }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: #64748b; font-weight: 500; border-radius: 12px; transition: all 0.2s; margin-bottom: 8px; }
+        .nav-item:hover, .nav-item.active { background: #eff6ff; color: #1f8ffd; }
+        .nav-item.active { font-weight: 600; }
+        
+        .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); z-index: 60; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -45%) scale(0.95); background: white; z-index: 70; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 95%; max-width: 550px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+        .modal.active .modal-overlay, .modal.active .modal-content { opacity: 1; pointer-events: auto; }
+        .modal.active .modal-content { transform: translate(-50%, -50%) scale(1); }
+
+        .type-radio { display: none; }
+        .type-label { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border: 2px solid #e2e8f0; border-radius: 16px; cursor: pointer; transition: all 0.2s; background: #f8fafc; font-size: 1.125rem; font-weight: bold; color: #64748b; }
+        #type-income:checked + .type-label { border-color: #10b981; background: #ecfdf5; color: #10b981; box-shadow: 0 4px 12px rgba(16,185,129,0.15); }
+        #type-expense:checked + .type-label { border-color: #ef4444; background: #fef2f2; color: #ef4444; box-shadow: 0 4px 12px rgba(239,68,68,0.15); }
+
+        /* 📄 พื้นที่เตรียม PNG (ซ่อนไว้) */
+        #a4-render-area { 
+            position: absolute; left: -9999px; top: 0; width: 210mm;
+            background: #e2e8f0;
+        }
+        .a4-page {
+            width: 210mm; min-height: 297mm; max-height: 297mm;
+            background: white; padding: 15mm; 
+            font-family: 'Sarabun', sans-serif; color: #1e293b; 
+            box-sizing: border-box; position: relative; overflow: hidden;
+        }
+        .a4-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+        .a4-table th, .a4-table td { border: 1px solid #cbd5e1; padding: 6px; }
+        .a4-table th { background-color: #f1f5f9; }
+        
+        .toast { position: fixed; bottom: 20px; right: 20px; left: 20px; background: #0f172a; color: white; padding: 16px 24px; border-radius: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 12px; transform: translateY(100px); opacity: 0; transition: all 0.4s; z-index: 100; text-align: center; }
+        @media (min-width: 768px) { .toast { left: auto; justify-content: flex-start; } }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        #cloud-loading { position: fixed; inset: 0; background: rgba(255,255,255,0.95); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.3s; }
+        .spinner { border: 4px solid rgba(31,143,253,0.2); width: 40px; height: 40px; border-radius: 50%; border-left-color: #1f8ffd; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="cloud-loading"><div class="flex flex-col items-center"><div class="spinner mb-4"></div><p class="font-bold text-slate-600 flex items-center gap-2"><i data-lucide="cloud-download" class="w-5 h-5"></i> กำลังโหลดข้อมูลบัญชี ATV...</p></div></div>
+    <div id="mobile-overlay" class="mobile-overlay" onclick="toggleSidebar()"></div>
+
+    <aside id="sidebar" class="sidebar p-6 flex flex-col">
+        <div class="flex items-center justify-between mb-10 px-2">
+            <div class="flex items-center gap-3"><div class="bg-[#1f8ffd] p-2 rounded-xl text-white shadow-lg"><i data-lucide="moon-star" class="w-6 h-6"></i></div><h1 class="text-xl font-bold text-slate-800">ชานชมดาว</h1></div>
+            <button onclick="toggleSidebar()" class="lg:hidden text-slate-400 bg-slate-50 p-2 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <nav class="flex-1 space-y-1">
+            <a href="index.html" class="nav-item"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> ภาพรวม</a>
+            <a href="calendar.html" class="nav-item"><i data-lucide="calendar-days" class="w-5 h-5"></i> ปฏิทินจองห้องพัก</a>
+            <a href="atv.html" class="nav-item active"><i data-lucide="car-front" class="w-5 h-5"></i> ระบบบัญชี ATV</a>
+            <a href="billing.html" class="nav-item"><i data-lucide="receipt" class="w-5 h-5"></i> จัดการบิล / ของใช้</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 bg-white p-4 lg:p-6 rounded-2xl lg:rounded-3xl border border-slate-100 shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="lg:hidden bg-slate-50 border p-2 rounded-lg"><i data-lucide="menu" class="w-5 h-5"></i></button>
+                <div>
+                    <h2 class="text-xl lg:text-2xl font-black text-slate-800 tracking-tight">ระบบบัญชี ATV</h2>
+                    <p class="text-sm text-slate-500 font-medium">คำนวณกำไรสุทธิ และแบ่งส่วน 50/50</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto bg-slate-50 p-2 rounded-xl border border-slate-200">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <span class="text-xs font-bold text-slate-400 uppercase ml-2">ตั้งแต่</span>
+                    <input type="date" id="filter-start" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none flex-1" onchange="fetchAtvData()">
+                </div>
+                <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 hidden sm:block"></i>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <span class="text-xs font-bold text-slate-400 uppercase ml-2">ถึง</span>
+                    <input type="date" id="filter-end" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none flex-1" onchange="fetchAtvData()">
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="stat-card border-l-4 border-emerald-500">
+                <p class="text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">รายรับทั้งหมด (ยอดรถ)</p>
+                <h3 class="text-3xl font-black text-slate-800" id="stat-income">฿0</h3>
+            </div>
+            <div class="stat-card border-l-4 border-red-500">
+                <p class="text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">หักรายจ่าย (น้ำมัน/ซ่อม)</p>
+                <h3 class="text-3xl font-black text-red-500" id="stat-expense">฿0</h3>
+            </div>
+            <div class="stat-card border-l-4 border-[#1f8ffd] bg-blue-50/30">
+                <p class="text-xs font-bold text-[#1f8ffd] mb-1 uppercase tracking-widest">กำไรสุทธิ (พร้อมแบ่ง)</p>
+                <h3 class="text-3xl font-black text-[#1f8ffd]" id="stat-profit">฿0</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 flex justify-between items-center shadow-sm">
+                <div>
+                    <p class="text-sm font-bold text-indigo-500 mb-1">ส่วนแบ่ง อาบอย (50%)</p>
+                    <h3 class="text-4xl font-black text-indigo-700" id="stat-arboy">฿0</h3>
+                </div>
+                <div class="bg-white p-3 rounded-xl shadow-sm text-indigo-500"><i data-lucide="user" class="w-8 h-8"></i></div>
+            </div>
+            <div class="bg-fuchsia-50 border border-fuchsia-200 rounded-2xl p-6 flex justify-between items-center shadow-sm">
+                <div>
+                    <p class="text-sm font-bold text-fuchsia-500 mb-1">ส่วนแบ่ง นุ้ย (50%)</p>
+                    <h3 class="text-4xl font-black text-fuchsia-700" id="stat-nui">฿0</h3>
+                </div>
+                <div class="bg-white p-3 rounded-xl shadow-sm text-fuchsia-500"><i data-lucide="user" class="w-8 h-8"></i></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 class="text-lg font-black text-slate-800">รายการบันทึกบัญชี</h3>
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="generateReport()" class="flex-1 sm:flex-none bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-50 transition flex justify-center items-center gap-2"><i data-lucide="image" class="w-5 h-5"></i> โหลดรูป A4 สรุปยอด</button>
+                    <button onclick="openModal()" class="flex-1 sm:flex-none bg-[#1f8ffd] text-white px-5 py-3 rounded-xl font-bold hover:bg-blue-600 transition shadow-md flex justify-center items-center gap-2"><i data-lucide="plus" class="w-5 h-5"></i> ลงบัญชีใหม่</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left whitespace-nowrap">
+                    <thead class="bg-slate-50 text-xs uppercase font-bold text-slate-500">
+                        <tr>
+                            <th class="py-4 px-6">วัน - เวลา</th>
+                            <th class="py-4 px-6">รายละเอียด</th>
+                            <th class="py-4 px-6 text-center">ผู้ทำรายการ</th>
+                            <th class="py-4 px-6 text-right">รายรับ (฿)</th>
+                            <th class="py-4 px-6 text-right">รายจ่าย (฿)</th>
+                            <th class="py-4 px-6 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transaction-list" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal กรอกข้อมูล -->
+    <div id="add-modal" class="modal">
+        <div class="modal-overlay" onclick="closeModal('add-modal')"></div>
+        <div class="modal-content">
+            <div class="bg-white px-6 py-5 border-b border-slate-100 flex justify-between items-center rounded-t-[24px]">
+                <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i data-lucide="file-plus" class="w-6 h-6 text-[#1f8ffd]"></i> ลงบันทึกบัญชี ATV</h2>
+                <button onclick="closeModal('add-modal')" class="text-slate-400 hover:text-slate-800 bg-slate-50 p-2 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="transaction-form" class="p-6 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <label>
+                        <input type="radio" name="t-type" id="type-income" value="income" class="type-radio" checked onchange="toggleFormFields()">
+                        <div class="type-label"><i data-lucide="arrow-down-circle" class="w-6 h-6"></i> ฝั่งรายรับ</div>
+                    </label>
+                    <label>
+                        <input type="radio" name="t-type" id="type-expense" value="expense" class="type-radio" onchange="toggleFormFields()">
+                        <div class="type-label"><i data-lucide="arrow-up-circle" class="w-6 h-6"></i> ฝั่งรายจ่าย</div>
+                    </label>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">วันที่</label>
+                        <input type="date" id="t-date" required class="w-full border-2 border-slate-200 rounded-xl px-4 py-4 outline-none focus:border-[#1f8ffd] text-lg font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">เวลา</label>
+                        <input type="time" id="t-time" required class="w-full border-2 border-slate-200 rounded-xl px-4 py-4 outline-none focus:border-[#1f8ffd] text-lg font-bold">
+                    </div>
+                </div>
+
+                <div id="income-fields" class="space-y-5">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-600 mb-2">จำนวนคน (คัน)</label>
+                            <input type="number" id="t-pax" class="w-full border-2 border-slate-200 rounded-xl px-4 py-4 outline-none focus:border-[#1f8ffd] text-lg font-bold text-slate-800" placeholder="ระบุจำนวน">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-600 mb-2">คนส่งลูกค้า / รับเอง</label>
+                            
+                            <div class="relative">
+                                <select id="t-referrer-select" class="w-full border-2 border-slate-200 rounded-xl px-4 py-4 outline-none focus:border-[#1f8ffd] text-lg font-bold text-slate-800 appearance-none bg-white" onchange="checkReferrerOther()">
+                                    </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                                    <i data-lucide="chevron-down" class="w-5 h-5"></i>
+                                </div>
+                            </div>
+
+                            <input type="text" id="t-referrer-other" class="hidden w-full border-2 border-orange-300 bg-orange-50 rounded-xl px-4 py-4 mt-3 outline-none focus:border-orange-500 text-lg font-bold text-slate-800" placeholder="พิมพ์ชื่อผู้ส่ง...">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="expense-fields" class="hidden">
+                    <label class="block text-sm font-bold text-slate-600 mb-2">รายละเอียดการจ่ายเงิน</label>
+                    <input type="text" id="t-desc-expense" class="w-full border-2 border-slate-200 rounded-xl px-4 py-4 outline-none focus:border-red-500 text-lg font-bold text-slate-800" placeholder="เช่น ซื้อน้ำมัน, ปะยาง">
+                </div>
+
+                <div class="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-sm font-bold text-slate-600">จำนวนเงิน (บาท)</label>
+                        <span class="text-xs text-orange-500 font-bold bg-orange-50 px-2 py-1 rounded border border-orange-200">เว้นว่างได้</span>
+                    </div>
+                    <input type="number" id="t-amount" class="w-full border-2 border-slate-200 rounded-xl px-5 py-4 outline-none focus:border-[#1f8ffd] text-3xl font-black text-[#1f8ffd] bg-white" placeholder="0">
+                </div>
+
+                <button type="submit" class="w-full bg-slate-900 text-white py-5 rounded-xl font-bold shadow-lg hover:bg-slate-800 transition text-xl mt-4">บันทึกข้อมูล</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 🌟 Modal สำหรับดาวน์โหลดไฟล์หลายหน้า (เพิ่มใหม่) -->
+    <div id="download-modal" class="modal">
+        <div class="modal-overlay" onclick="closeModal('download-modal')"></div>
+        <div class="modal-content">
+            <div class="bg-indigo-50 px-6 py-5 border-b border-indigo-100 flex justify-between items-center rounded-t-[24px]">
+                <h2 class="text-xl font-black text-indigo-700 flex items-center gap-2"><i data-lucide="download" class="w-6 h-6"></i> โหลดรูป A4 สรุปยอด</h2>
+                <button onclick="closeModal('download-modal')" class="text-indigo-400 hover:text-indigo-800 bg-white p-2 rounded-full shadow-sm"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm font-bold text-slate-500 mb-4 text-center" id="download-status-text">ระบบกำลังสร้างรูปภาพ กรุณารอสักครู่...</p>
+                
+                <div id="download-spinner" class="flex justify-center mb-6">
+                    <div class="spinner border-t-indigo-600"></div>
+                </div>
+
+                <div id="download-links-container" class="space-y-3">
+                    <!-- ปุ่มดาวน์โหลดจะเด้งขึ้นมาตรงนี้ทีละหน้า -->
+                </div>
+                
+                <p class="text-[10px] text-slate-400 mt-6 text-center">สามารถกดที่ปุ่มเพื่อดาวน์โหลดและเซฟลงเครื่องได้เลยครับ</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="a4-render-area"></div>
+
+    <div id="toast" class="toast"><i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-400"></i> <span id="toast-msg">สำเร็จ</span></div>
+
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('mobile-overlay').classList.toggle('open'); }
+        function setElText(id, text) { const el = document.getElementById(id); if(el) el.innerText = text; }
+        function showToast(msg) { const t = document.getElementById('toast'); document.getElementById('toast-msg').innerText = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        const sb = supabase.createClient('https://derxnhwfecvwpqaeufly.supabase.co', 'sb_publishable_qmrZBAxD8KbN3hTPrF-xOA_oxbkYep6');
+        let atvData = [];
+        let currentEditingId = null;
+
+        function initDateRange() {
+            const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+            const todayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0') + "-" + String(now.getDate()).padStart(2,'0');
+            const firstDayStr = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0') + "-01";
+            document.getElementById('filter-start').value = firstDayStr;
+            document.getElementById('filter-end').value = todayStr;
+        }
+
+        function formatThaiDateTimeLong(dateStr, timeStr) {
+            const d = new Date(dateStr);
+            const months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+            const time = timeStr ? timeStr.substring(0, 5) : '-';
+            return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear() + 543} เวลา ${time}`;
+        }
+
+        function toggleFormFields() {
+            const isIncome = document.getElementById('type-income').checked;
+            const tAmount = document.getElementById('t-amount');
+            if(isIncome) {
+                document.getElementById('income-fields').classList.remove('hidden');
+                document.getElementById('expense-fields').classList.add('hidden');
+                tAmount.classList.remove('text-red-500', 'focus:border-red-500'); 
+                tAmount.classList.add('text-[#1f8ffd]', 'focus:border-[#1f8ffd]');
+                document.getElementById('t-desc-expense').required = false;
+            } else {
+                document.getElementById('income-fields').classList.add('hidden');
+                document.getElementById('expense-fields').classList.remove('hidden');
+                tAmount.classList.remove('text-[#1f8ffd]', 'focus:border-[#1f8ffd]'); 
+                tAmount.classList.add('text-red-500', 'focus:border-red-500');
+                document.getElementById('t-desc-expense').required = true;
+            }
+        }
+
+        // ระบบตัวเลือก Dropdown และ อื่นๆ
+        function updateReferrerList() {
+            const select = document.getElementById('t-referrer-select');
+            select.innerHTML = '';
+            
+            const referrers = [...new Set(atvData.filter(d => d.transaction_type === 'income' && d.staff_name && d.staff_name !== '-').map(d => d.staff_name))];
+            const combined = [...new Set(['รับเอง', 'ญาติ', 'ชานชมดาว', ...referrers])];
+            
+            combined.forEach(ref => { 
+                const opt = document.createElement('option'); 
+                opt.value = ref; 
+                opt.textContent = ref;
+                select.appendChild(opt); 
+            });
+
+            // เพิ่มตัวเลือก "อื่นๆ" ไว้ท้ายสุด
+            const otherOpt = document.createElement('option');
+            otherOpt.value = 'other';
+            otherOpt.textContent = 'อื่นๆ (พิมพ์ระบุเอง)...';
+            otherOpt.className = 'font-bold text-[#1f8ffd]';
+            select.appendChild(otherOpt);
+        }
+
+        function checkReferrerOther() {
+            const select = document.getElementById('t-referrer-select');
+            const otherInput = document.getElementById('t-referrer-other');
+            if (select.value === 'other') {
+                otherInput.classList.remove('hidden');
+                otherInput.focus();
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.value = ''; // เคลียร์ค่าที่พิมพ์ค้างไว้
+            }
+        }
+
+        async function fetchAtvData() {
+            const start = document.getElementById('filter-start').value;
+            const end = document.getElementById('filter-end').value;
+            if(!start || !end) return;
+
+            document.getElementById('cloud-loading').style.display = 'flex';
+            try {
+                const { data, error } = await sb.from('atv_transactions')
+                                        .select('*')
+                                        .gte('transaction_date', start)
+                                        .lte('transaction_date', end)
+                                        .order('transaction_date', { ascending: false })
+                                        .order('action_time', { ascending: false });
+                if (error) throw error;
+                atvData = data || [];
+                renderAtvData();
+                updateReferrerList();
+            } catch (error) { alert("เกิดข้อผิดพลาดในการโหลดข้อมูล"); }
+            document.getElementById('cloud-loading').style.display = 'none';
+        }
+
+        function renderAtvData() {
+            const tbody = document.getElementById('transaction-list');
+            tbody.innerHTML = '';
+            let totalIncome = 0; let totalExpense = 0;
+
+            if (atvData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-slate-400 font-bold text-lg">ไม่มีรายการเคลื่อนไหว</td></tr>';
+            } else {
+                atvData.forEach(item => {
+                    const isIncome = item.transaction_type === 'income';
+                    const amount = item.amount;
+                    if (amount !== null) { if (isIncome) totalIncome += parseFloat(amount); else totalExpense += parseFloat(amount); }
+
+                    const dateLong = formatThaiDateTimeLong(item.transaction_date, item.action_time);
+                    let amtIncome = '-'; let amtExpense = '-';
+                    if (amount === null) {
+                        const waiting = '<span class="bg-orange-50 text-orange-500 px-2 py-1 rounded text-xs font-bold border border-orange-200">รอกรอกยอด</span>';
+                        if(isIncome) amtIncome = waiting; else amtExpense = waiting;
+                    } else {
+                        if(isIncome) amtIncome = `<span class="text-emerald-600">+฿${parseFloat(amount).toLocaleString()}</span>`;
+                        else amtExpense = `<span class="text-red-500">-฿${parseFloat(amount).toLocaleString()}</span>`;
+                    }
+
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                            <td class="py-4 px-6 text-sm font-bold text-slate-700">${dateLong}</td>
+                            <td class="py-4 px-6 text-sm font-bold text-slate-800">${item.description}</td>
+                            <td class="py-4 px-6 text-sm text-slate-500 text-center font-bold">${item.staff_name || '-'}</td>
+                            <td class="py-4 px-6 text-right font-black text-base bg-emerald-50/30">${amtIncome}</td>
+                            <td class="py-4 px-6 text-right font-black text-base bg-red-50/30">${amtExpense}</td>
+                            <td class="py-4 px-6 text-center">
+                                <button onclick="editData(${item.id})" class="text-slate-400 hover:text-[#1f8ffd] p-2 transition bg-white shadow-sm rounded-lg mx-1 border"><i data-lucide="edit-3" class="w-4 h-4 inline"></i></button>
+                                <button onclick="deleteData(${item.id})" class="text-slate-400 hover:text-white hover:bg-red-500 p-2 transition bg-white shadow-sm rounded-lg mx-1 border"><i data-lucide="trash-2" class="w-4 h-4 inline"></i></button>
+                            </td>
+                        </tr>`;
+                });
+            }
+
+            const netProfit = totalIncome - totalExpense;
+            setElText('stat-income', `฿${totalIncome.toLocaleString()}`);
+            setElText('stat-expense', `฿${totalExpense.toLocaleString()}`);
+            setElText('stat-profit', `฿${netProfit.toLocaleString()}`);
+            setElText('stat-arboy', `฿${(netProfit / 2).toLocaleString()}`);
+            setElText('stat-nui', `฿${(netProfit / 2).toLocaleString()}`);
+            lucide.createIcons();
+        }
+
+        function openModal() {
+            document.getElementById('transaction-form').reset();
+            currentEditingId = null;
+            const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+            document.getElementById('t-date').value = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,'0') + "-" + String(now.getDate()).padStart(2,'0');
+            document.getElementById('t-time').value = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+            toggleFormFields();
+            
+            // รีเซ็ต Dropdown
+            const select = document.getElementById('t-referrer-select');
+            if(select.options.length > 0) select.selectedIndex = 0;
+            checkReferrerOther(); // ซ่อนกล่องพิมพ์อื่นๆ
+            
+            document.getElementById('add-modal').classList.add('active');
+        }
+
+        function editData(id) {
+            const item = atvData.find(x => x.id === id);
+            if(!item) return;
+            currentEditingId = id;
+            if(item.transaction_type === 'income') document.getElementById('type-income').checked = true;
+            else document.getElementById('type-expense').checked = true;
+            toggleFormFields();
+            
+            document.getElementById('t-date').value = item.transaction_date;
+            document.getElementById('t-time').value = item.action_time || '';
+            
+            if(item.transaction_type === 'income') {
+                const paxMatch = item.description.match(/\d+/);
+                document.getElementById('t-pax').value = paxMatch ? paxMatch[0] : '';
+                
+                const staffName = item.staff_name !== '-' ? item.staff_name : '';
+                const select = document.getElementById('t-referrer-select');
+                
+                // ตรวจสอบว่าชื่อนี้มีอยู่ใน Dropdown หรือไม่
+                let found = false;
+                for (let i = 0; i < select.options.length; i++) {
+                    if (select.options[i].value === staffName) { found = true; break; }
+                }
+
+                if (found && staffName !== '') {
+                    select.value = staffName;
+                } else if (staffName !== '') {
+                    // ถ้าไม่มีในลิสต์ ให้เลือก 'other' แล้วใส่ชื่อในช่อง text
+                    select.value = 'other';
+                    document.getElementById('t-referrer-other').value = staffName;
+                } else {
+                    select.value = 'รับเอง';
+                }
+                checkReferrerOther(); // อัปเดตแสดง/ซ่อนช่องพิมพ์ตามค่า
+
+            } else { document.getElementById('t-desc-expense').value = item.description; }
+            
+            document.getElementById('t-amount').value = item.amount !== null ? item.amount : '';
+            document.getElementById('add-modal').classList.add('active');
+        }
+
+        document.getElementById('transaction-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btnSubmit = e.target.querySelector('button[type="submit"]');
+            btnSubmit.innerHTML = 'กำลังบันทึก...'; btnSubmit.disabled = true;
+
+            const isIncome = document.getElementById('type-income').checked;
+            let finalDescription = ''; let staff = '';
+
+            if(isIncome) {
+                const pax = document.getElementById('t-pax').value;
+                const refSelect = document.getElementById('t-referrer-select').value;
+                
+                // เช็คค่าจาก Dropdown ว่าเลือก 'อื่นๆ' ไหม
+                if (refSelect === 'other') {
+                    staff = document.getElementById('t-referrer-other').value || '-';
+                } else {
+                    staff = refSelect || '-';
+                }
+                
+                finalDescription = `ลูกค้า ${pax || '?'} คัน`;
+            } else {
+                finalDescription = document.getElementById('t-desc-expense').value; staff = '-';
+            }
+
+            const amtInput = document.getElementById('t-amount').value;
+            const payload = {
+                transaction_type: isIncome ? 'income' : 'expense', transaction_date: document.getElementById('t-date').value,
+                action_time: document.getElementById('t-time').value, description: finalDescription,
+                staff_name: staff, amount: amtInput === '' ? null : parseInt(amtInput)
+            };
+
+            try {
+                if(currentEditingId) { await sb.from('atv_transactions').update(payload).eq('id', currentEditingId); showToast('อัปเดตข้อมูลสำเร็จ!'); } 
+                else { await sb.from('atv_transactions').insert([payload]); showToast('บันทึกข้อมูลใหม่สำเร็จ!'); }
+                closeModal('add-modal'); fetchAtvData();
+            } catch(err) { alert('บันทึกผิดพลาด'); }
+            btnSubmit.innerHTML = 'บันทึกข้อมูล'; btnSubmit.disabled = false;
+        });
+
+        async function deleteData(id) {
+            if(!confirm('ยืนยันลบรายการนี้?')) return;
+            document.getElementById('cloud-loading').style.display = 'flex';
+            try { await sb.from('atv_transactions').delete().eq('id', id); showToast('ลบสำเร็จ'); fetchAtvData(); } catch(e) { alert('ลบไม่สำเร็จ'); }
+        }
+
+        // 🌟 ระบบสร้างและส่งออกไฟล์ A4 แบบแบ่งหน้า
+        async function generateReport() {
+            if(atvData.length === 0) { alert('ไม่มีข้อมูลให้สรุปยอดค่ะ'); return; }
+
+            // เปิด Modal ดาวน์โหลด
+            const linkContainer = document.getElementById('download-links-container');
+            linkContainer.innerHTML = '';
+            document.getElementById('download-status-text').innerText = 'กำลังคำนวณแบ่งหน้าเอกสาร...';
+            document.getElementById('download-spinner').style.display = 'flex';
+            document.getElementById('download-modal').classList.add('active');
+
+            const renderArea = document.getElementById('a4-render-area');
+            renderArea.innerHTML = '';
+
+            // เรียงข้อมูลจาก น้อยไปมาก (เก่าไปใหม่) สำหรับการทำเอกสาร
+            const sortedData = [...atvData].sort((a, b) => {
+                const timeA = new Date(a.transaction_date + 'T' + (a.action_time || '00:00:00')).getTime();
+                const timeB = new Date(b.transaction_date + 'T' + (b.action_time || '00:00:00')).getTime();
+                return timeA - timeB;
+            });
+
+            const incomes = sortedData.filter(d => d.transaction_type === 'income');
+            const expenses = sortedData.filter(d => d.transaction_type === 'expense');
+
+            const startStr = document.getElementById('filter-start').value; 
+            const endStr = document.getElementById('filter-end').value;
+            const formatDateForFile = (dStr) => { const parts = dStr.split('-'); return `${parts[2]}-${parts[1]}-${parseInt(parts[0])+543}`; };
+            const fileStart = formatDateForFile(startStr); const fileEnd = formatDateForFile(endStr);
+            
+            const formatThaiDateStr = (dStr) => { const d = new Date(dStr); return `${d.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][d.getMonth()]} ${d.getFullYear()+543}`; };
+            const titleDateText = startStr === endStr ? `ประจำวันที่ ${formatThaiDateStr(startStr)}` : `ระหว่างวันที่ ${formatThaiDateStr(startStr)} - ${formatThaiDateStr(endStr)}`;
+
+            let page = 1;
+            let incIdx = 0; let expIdx = 0;
+
+            // ลูปสร้าง HTML หน้า A4
+            while (incIdx < incomes.length || expIdx < expenses.length || page === 1) {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'a4-page';
+                
+                const limit = (page === 1) ? 18 : 35; // หน้าแรกมี Header ให้ตารางสั้นหน่อย
+                const pageIncomes = incomes.slice(incIdx, incIdx + limit);
+                const pageExpenses = expenses.slice(expIdx, expIdx + limit);
+
+                let headerHTML = '';
+                if (page === 1) {
+                    headerHTML = `
+                        <div style="font-size: 18pt; font-weight: bold; text-align: center; color: #0f172a;">สรุปบัญชี ATV ชานชมดาว โฮมสเตย์</div>
+                        <div style="font-size: 12pt; text-align: center; color: #64748b; margin-bottom: 15px;">${titleDateText}</div>
+
+                        <div style="display: flex; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
+                            <div style="flex: 1; text-align: center; padding: 10px; border-right: 1px solid #e2e8f0;">
+                                <div style="font-size: 11pt; color: #64748b; font-weight: bold;">รายรับรวม</div>
+                                <div style="font-size: 16pt; color: #10b981; font-weight: bold;">${document.getElementById('stat-income').innerText}</div>
+                            </div>
+                            <div style="flex: 1; text-align: center; padding: 10px; border-right: 1px solid #e2e8f0;">
+                                <div style="font-size: 11pt; color: #64748b; font-weight: bold;">หักรายจ่าย</div>
+                                <div style="font-size: 16pt; color: #ef4444; font-weight: bold;">${document.getElementById('stat-expense').innerText}</div>
+                            </div>
+                            <div style="flex: 1; text-align: center; padding: 10px; background: #f8fafc;">
+                                <div style="font-size: 11pt; color: #1f8ffd; font-weight: bold;">กำไรสุทธิ</div>
+                                <div style="font-size: 16pt; color: #1f8ffd; font-weight: bold;">${document.getElementById('stat-profit').innerText}</div>
+                            </div>
+                        </div>
+
+                        <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                            <div style="font-size: 11pt; font-weight: bold; text-align: center; margin-bottom: 5px;">สรุปยอดแบ่งผลกำไร (50/50)</div>
+                            <div style="display: flex; justify-content: space-around; font-size: 14pt; font-weight: bold;">
+                                <div><span style="color: #64748b;">อาบอย:</span> <span style="color: #4f46e5;">${document.getElementById('stat-arboy').innerText}</span></div>
+                                <div><span style="color: #64748b;">นุ้ย:</span> <span style="color: #c026d3;">${document.getElementById('stat-nui').innerText}</span></div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    headerHTML = `<div style="font-size: 14pt; font-weight: bold; text-align: center; color: #0f172a; margin-bottom: 15px;">รายการบันทึกบัญชี (ต่อ)</div>`;
+                }
+
+                let incRows = '';
+                pageIncomes.forEach(item => {
+                    const d = new Date(item.transaction_date);
+                    const time = item.action_time ? item.action_time.substring(0,5) : '';
+                    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${time}`;
+                    let desc = item.description; if(item.staff_name !== '-') desc += ` (${item.staff_name})`;
+                    const amt = item.amount === null ? '-' : item.amount.toLocaleString();
+                    incRows += `<tr><td style="width:25%; font-size: 9pt;">${dateStr}</td><td>${desc}</td><td style="text-align:right; font-weight:bold; color:#10b981; width:20%;">${amt}</td></tr>`;
+                });
+
+                let expRows = '';
+                pageExpenses.forEach(item => {
+                    const d = new Date(item.transaction_date);
+                    const time = item.action_time ? item.action_time.substring(0,5) : '';
+                    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${time}`;
+                    const amt = item.amount === null ? '-' : item.amount.toLocaleString();
+                    expRows += `<tr><td style="width:25%; font-size: 9pt;">${dateStr}</td><td>${item.description}</td><td style="text-align:right; font-weight:bold; color:#ef4444; width:20%;">${amt}</td></tr>`;
+                });
+
+                const tableHTML = `
+                    <div style="display: flex; gap: 4mm;">
+                        <div style="flex: 1;">
+                            <div style="font-size: 12pt; font-weight: bold; color: #10b981; margin-bottom: 5px; text-align: center;">ตารางฝั่งรายรับ</div>
+                            <table class="a4-table">
+                                <thead><tr><th>วัน/เวลา</th><th>รายละเอียด</th><th>ยอด (฿)</th></tr></thead>
+                                <tbody>${incRows || '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">- ว่าง -</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 12pt; font-weight: bold; color: #ef4444; margin-bottom: 5px; text-align: center;">ตารางฝั่งรายจ่าย</div>
+                            <table class="a4-table">
+                                <thead><tr><th>วัน/เวลา</th><th>รายละเอียด</th><th>ยอด (฿)</th></tr></thead>
+                                <tbody>${expRows || '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">- ว่าง -</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                const footerHTML = `
+                    <div style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; justify-content: space-between; font-size: 10pt; color: #94a3b8;">
+                        <div>พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</div>
+                        <div>หน้าที่ ${page}</div>
+                    </div>
+                `;
+
+                pageDiv.innerHTML = headerHTML + tableHTML + footerHTML;
+                renderArea.appendChild(pageDiv);
+
+                incIdx += limit; expIdx += limit; page++;
+                if (incIdx >= incomes.length && expIdx >= expenses.length) break;
+            }
+
+            // แคปเจอร์ภาพทีละหน้าแล้วสร้างปุ่มให้กดดาวน์โหลด
+            const pagesToRender = document.querySelectorAll('.a4-page');
+            for (let i = 0; i < pagesToRender.length; i++) {
+                document.getElementById('download-status-text').innerText = `กำลังสร้างรูปภาพหน้าที่ ${i+1} จาก ${pagesToRender.length}...`;
+                
+                const canvas = await html2canvas(pagesToRender[i], { scale: 2.5, backgroundColor: "#ffffff" });
+                const dataUrl = canvas.toDataURL("image/png");
+                const fileName = `สรุป ATV ระหว่างวันที่ ${fileStart} - ${fileEnd} หน้าที่ ${i+1}.png`;
+                
+                // สร้างปุ่มลิงก์ให้กดดาวน์โหลด
+                linkContainer.innerHTML += `
+                    <a href="${dataUrl}" download="${fileName}" class="w-full bg-white border border-indigo-200 text-indigo-700 py-4 rounded-xl font-black hover:bg-indigo-50 transition flex justify-between items-center px-5 shadow-sm">
+                        <span class="flex items-center gap-3"><div class="bg-indigo-100 p-2 rounded-lg"><i data-lucide="download" class="w-5 h-5"></i></div> รูปภาพหน้าที่ ${i+1}</span>
+                        <span class="text-[10px] bg-indigo-50 text-indigo-500 px-2 py-1 rounded-md border border-indigo-100 uppercase tracking-widest">คลิกเพื่อเซฟ</span>
+                    </a>
+                `;
+                lucide.createIcons();
+                
+                await new Promise(r => setTimeout(r, 100)); // พักหายใจ
+            }
+
+            // อัปเดตข้อความเมื่อเสร็จสิ้น
+            document.getElementById('download-status-text').innerHTML = `<span class="text-emerald-500">สร้างรูปภาพเสร็จสิ้น! กดดาวน์โหลดทีละหน้าได้เลยครับ</span>`;
+            document.getElementById('download-spinner').style.display = 'none';
+        }
+
+        initDateRange(); fetchAtvData();
+    </script>
+</body>
+</html>

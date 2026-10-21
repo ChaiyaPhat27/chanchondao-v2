@@ -1,0 +1,215 @@
+/* Google Sans เฉพาะชุดอักษรไทย + อังกฤษ (ไม่เอาภาษาอื่นให้ไฟล์เล็ก) */
+@import '@fontsource/google-sans/thai-400.css';
+@import '@fontsource/google-sans/thai-500.css';
+@import '@fontsource/google-sans/thai-600.css';
+@import '@fontsource/google-sans/thai-700.css';
+@import '@fontsource/google-sans/latin-400.css';
+@import '@fontsource/google-sans/latin-500.css';
+@import '@fontsource/google-sans/latin-600.css';
+@import '@fontsource/google-sans/latin-700.css';
+@import 'tailwindcss';
+
+/* ───────────── แบรนด์ "ชานชมดาว": ท้องฟ้ากลางคืน + แสงดาว ───────────── */
+@theme {
+  --font-sans: 'Google Sans', system-ui, -apple-system, sans-serif;
+
+  /* ท้องฟ้ากลางคืน (ใช้กับเมนูข้างและพื้นหลังเด่น) */
+  --color-night-950: #060a1c;
+  --color-night-900: #0b1230;
+  --color-night-800: #131c45;
+  --color-night-700: #1d295f;
+  --color-night-600: #2b3a7d;
+
+  /* สีหลัก: น้ำเงินคราม */
+  --color-brand-50: #eef1ff;
+  --color-brand-100: #dfe4ff;
+  --color-brand-200: #c3cbff;
+  --color-brand-300: #9ea9ff;
+  --color-brand-400: #7381ff;
+  --color-brand-500: #4f5dfb;
+  --color-brand-600: #3b46e8;
+  --color-brand-700: #3037c4;
+
+  /* แสงดาว: เหลืองอำพัน (ใช้แต่งจุดเด่น) */
+  --color-star-100: #fff3d6;
+  --color-star-200: #ffe3a3;
+  --color-star-300: #ffd06b;
+  --color-star-400: #fbbd3c;
+  --color-star-500: #f0a01a;
+  --color-star-600: #c97c0c;
+
+  --color-canvas: #f4f5fa;
+  --color-ink: #0c1124;
+
+  --radius-4xl: 2rem;
+
+  --shadow-soft: 0 1px 2px rgb(12 17 36 / 0.04), 0 4px 16px -4px rgb(12 17 36 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(12 17 36 / 0.04), 0 16px 40px -12px rgb(12 17 36 / 0.16);
+  --shadow-glow: 0 8px 24px -6px rgb(79 93 251 / 0.45);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  /* backwards (ไม่ใช่ both): เล่นจบแล้วไม่ค้าง transform ไม่งั้นปุ่ม position:fixed ข้างในจะไม่ลอยตามจอ */
+  --animate-rise: rise 0.5s var(--ease-out-expo) backwards;
+  --animate-fade: fade 0.3s ease-out both;
+  --animate-twinkle: twinkle 3.2s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.82); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+/* ───────────── พื้นฐาน ───────────── */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+  ::selection {
+    @apply bg-brand-200 text-ink;
+  }
+  /* ตัวเลขเงินให้กว้างเท่ากัน ไม่กระตุกเวลาเปลี่ยนค่า */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+  /* ช่องตัวเลขไม่ต้องมีปุ่มขึ้นลง */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}
+
+/* แถบเลื่อนบาง ๆ */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(12 17 36 / 0.18) transparent;
+}
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* พื้นหลังท้องฟ้ามีดาวกระจาย (ใช้ CSS ล้วน ไม่มีรูป) */
+@utility starfield {
+  background-color: var(--color-night-900);
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.8), transparent 60%),
+    radial-gradient(1px 1px at 72% 12%, rgb(255 255 255 / 0.6), transparent 60%),
+    radial-gradient(1.5px 1.5px at 38% 42%, rgb(255 230 170 / 0.9), transparent 60%),
+    radial-gradient(1px 1px at 86% 54%, rgb(255 255 255 / 0.55), transparent 60%),
+    radial-gradient(1px 1px at 22% 76%, rgb(255 255 255 / 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 60% 86%, rgb(255 255 255 / 0.7), transparent 60%),
+    radial-gradient(1px 1px at 92% 92%, rgb(255 230 170 / 0.6), transparent 60%),
+    radial-gradient(120% 80% at 100% 0%, rgb(79 93 251 / 0.35), transparent 60%),
+    radial-gradient(90% 70% at 0% 100%, rgb(240 160 26 / 0.12), transparent 60%);
+}
+
+/* โครงกระดูกตอนโหลด */
+@utility skeleton {
+  background: linear-gradient(90deg, rgb(12 17 36 / 0.05) 25%, rgb(12 17 36 / 0.1) 37%, rgb(12 17 36 / 0.05) 63%);
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
+  border-radius: 0.75rem;
+}
+
+/* ───────────── เปลี่ยนหน้าแบบลื่น (View Transitions API) ───────────── */
+::view-transition-old(page),
+::view-transition-new(page) {
+  animation-duration: 0.32s;
+  animation-timing-function: var(--ease-out-expo);
+}
+::view-transition-old(page) {
+  animation-name: vt-out;
+}
+::view-transition-new(page) {
+  animation-name: vt-in;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+@keyframes vt-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ───────────── พิมพ์เอกสาร ───────────── */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body {
+    background: white;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-doc {
+    width: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .print-doc > div {
+    zoom: 1 !important;
+  }
+}

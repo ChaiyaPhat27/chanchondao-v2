@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ใบเสนอราคา - ชานชมดาว โฮมสเตย์</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body { 
+            background-color: #cbd5e1; 
+            display: flex; 
+            justify-content: center; 
+            padding: 40px 20px; 
+            margin: 0;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        /* 📄 ตั้งค่ากระดาษ A4 มาตรฐาน */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            padding: 20mm;
+            box-sizing: border-box;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            position: relative;
+            color: #1e293b;
+        }
+
+        /* 🔤 ตั้งค่าขนาดฟอนต์แบบเอกสารราชการ (Point) */
+        .text-normal { font-size: 16pt; line-height: 1.4; }
+        .text-sm { font-size: 14pt; line-height: 1.4; }
+        .text-h1 { font-size: 26pt; font-weight: bold; color: #0f172a; margin: 0 0 5px 0; }
+        .text-h2 { font-size: 20pt; font-weight: bold; margin: 0 0 10px 0; }
+        .text-bold { font-weight: 600; }
+        .text-blue { color: #1f8ffd; }
+
+        /* เลย์เอาต์พื้นฐาน */
+        .flex-between { display: flex; justify-content: space-between; align-items: flex-start; }
+        .mb-20 { margin-bottom: 20px; }
+        .mb-40 { margin-bottom: 40px; }
+        .text-right { text-align: right; }
+        .border-b { border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+
+        /* ตาราง */
+        .invoice-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .invoice-table th, .invoice-table td { border: 1px solid #cbd5e1; padding: 10px; font-size: 16pt; }
+        .invoice-table th { background-color: #f8fafc; font-weight: bold; text-align: center; }
+        .invoice-table td.center { text-align: center; }
+        .invoice-table td.right { text-align: right; }
+
+        /* สรุปยอด */
+        .summary-box { width: 300px; margin-left: auto; margin-top: 20px; font-size: 16pt; }
+        .summary-row { display: flex; justify-content: space-between; padding: 5px 0; }
+        .summary-total { border-top: 2px solid #1e293b; font-weight: bold; font-size: 18pt; padding-top: 10px; margin-top: 5px; }
+
+        /* ปุ่มควบคุม (ไม่พริ้นต์ออกไป) */
+        .controls { position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; }
+        .btn { padding: 10px 20px; border-radius: 8px; border: none; font-family: 'Sarabun', sans-serif; font-size: 16px; font-weight: bold; cursor: pointer; color: white; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-dark { background: #1e293b; }
+        .btn-blue { background: #1f8ffd; }
+        .btn-green { background: #10b981; }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .a4-page { box-shadow: none; margin: 0; padding: 10mm; }
+            .controls { display: none; }
+        }
+
+        #loading, #error { text-align: center; font-size: 20px; margin-top: 50px; font-weight: bold; }
+        #error { color: red; display: none; }
+        #quotation-content { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button onclick="window.history.back()" class="btn btn-dark"><i data-lucide="arrow-left" class="w-4 h-4"></i> กลับ</button>
+        <button onclick="downloadImage()" class="btn btn-blue"><i data-lucide="image" class="w-4 h-4"></i> โหลดรูปภาพ</button>
+        <button onclick="window.print()" class="btn btn-green"><i data-lucide="printer" class="w-4 h-4"></i> พิมพ์เอกสาร</button>
+    </div>
+
+    <div id="loading">กำลังโหลดข้อมูลใบเสนอราคา...</div>
+    <div id="error">เกิดข้อผิดพลาด หรือไม่พบรหัสการจอง โปรดกลับไปที่หน้าปฏิทิน</div>
+
+    <div class="a4-page" id="quotation-content">
+        <div class="flex-between border-b mb-40">
+            <div>
+                <h1 class="text-h1 text-blue">ชานชมดาว โฮมสเตย์</h1>
+                <p class="text-normal">123 หมู่ 4 ต.สองพี่น้อง อ.แก่งกระจาน จ.เพชรบุรี 76170</p>
+                <p class="text-normal">โทรศัพท์: 081-XXX-XXXX | Line: @chanchomdao</p>
+            </div>
+            <div class="text-right">
+                <h1 class="text-h1">ใบเสนอราคา</h1>
+                <p class="text-normal text-bold">QUOTATION</p>
+                <br>
+                <p class="text-normal">เลขที่อ้างอิง: <span id="v-id" class="text-bold">-</span></p>
+                <p class="text-normal">วันที่ทำรายการ: <span id="v-date">-</span></p>
+            </div>
+        </div>
+
+        <div class="flex-between mb-40">
+            <div style="width: 48%;">
+                <h2 class="text-h2">ข้อมูลลูกค้า (Customer)</h2>
+                <p class="text-normal text-bold" id="v-name">-</p>
+                <p class="text-normal">เบอร์โทรศัพท์: <span id="v-phone">-</span></p>
+                <p class="text-normal">ช่องทางติดต่อ: <span id="v-facebook">-</span></p>
+            </div>
+            <div style="width: 48%;">
+                <h2 class="text-h2">รายละเอียดการเข้าพัก (Stay Details)</h2>
+                <p class="text-normal">วันเช็คอิน: <span class="text-bold" id="v-ci">-</span></p>
+                <p class="text-normal">วันเช็คเอาท์: <span class="text-bold" id="v-co">-</span></p>
+                <p class="text-normal">ระยะเวลาเข้าพัก: <span class="text-bold" id="v-nights">-</span></p>
+            </div>
+        </div>
+
+        <table class="invoice-table mb-20">
+            <thead>
+                <tr>
+                    <th style="width: 10%;">ลำดับ</th>
+                    <th style="width: 50%;">รายการ (Description)</th>
+                    <th style="width: 15%;">จำนวน</th>
+                    <th style="width: 25%;">จำนวนเงิน (บาท)</th>
+                </tr>
+            </thead>
+            <tbody id="v-items">
+                </tbody>
+        </table>
+
+        <div class="flex-between">
+            <div style="width: 50%;">
+                <h2 class="text-normal text-bold">หมายเหตุ (Remarks):</h2>
+                <p class="text-normal" id="v-remark" style="color: #475569;">-</p>
+            </div>
+            
+            <div class="summary-box">
+                <div class="summary-row">
+                    <span>ราคาปกติ:</span>
+                    <span id="v-basetotal">0.00</span>
+                </div>
+                <div class="summary-row" id="v-discount-row" style="display: none; color: #ef4444;">
+                    <span>ส่วนลด:</span>
+                    <span id="v-discount">0.00</span>
+                </div>
+                <div class="summary-row text-bold">
+                    <span>ยอดรวมสุทธิ:</span>
+                    <span id="v-total">0.00</span>
+                </div>
+                <div class="summary-row text-bold" style="color: #10b981;">
+                    <span>มัดจำแล้ว:</span>
+                    <span id="v-deposit">0.00</span>
+                </div>
+                <div class="summary-row summary-total text-blue">
+                    <span>คงเหลือชำระ:</span>
+                    <span id="v-balance">0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div style="position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid #cbd5e1; padding-top: 20px;">
+            <p class="text-normal text-bold">ช่องทางการชำระเงิน</p>
+            <p class="text-normal">ธนาคารกสิกรไทย (K-Bank) | เลขบัญชี: <strong>XXX-X-XXXXX-X</strong></p>
+            <p class="text-normal">ชื่อบัญชี: บจก. ชานชมดาว โฮมสเตย์</p>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ตั้งค่า Supabase
+        const SUPABASE_URL = 'https://derxnhwfecvwpqaeufly.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_qmrZBAxD8KbN3hTPrF-xOA_oxbkYep6';
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookingId = urlParams.get('id');
+
+        async function init() {
+            if (!bookingId) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                return;
+            }
+
+            try {
+                const { data: b, error } = await sb.from('bookings').select('*').eq('id', bookingId).single();
+                if(error) throw error;
+
+                const [resRooms, resZones] = await Promise.all([
+                    sb.from('rooms').select('*'),
+                    sb.from('zones').select('*')
+                ]);
+
+                // ใส่ข้อมูลพื้นฐาน
+                document.getElementById('v-id').innerText = b.short_code_id || `#${b.id}`;
+                document.getElementById('v-date').innerText = new Date(b.created_at).toLocaleDateString('th-TH');
+                document.getElementById('v-name').innerText = b.customer_name;
+                document.getElementById('v-phone').innerText = b.customer_phone || '-';
+                document.getElementById('v-facebook').innerText = b.customer_facebook || '-';
+                document.getElementById('v-remark').innerText = b.remark || '-';
+
+                // คำนวณวันที่
+                const ci = new Date(b.check_in); const co = new Date(b.check_out);
+                const nights = Math.round((co - ci) / (1000 * 60 * 60 * 24));
+                document.getElementById('v-ci').innerText = ci.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+                document.getElementById('v-co').innerText = co.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+                document.getElementById('v-nights').innerText = `${nights} คืน`;
+
+                // ใส่ตาราง
+                const tableBody = document.getElementById('v-items');
+                const roomIdsArr = JSON.parse(b.room_ids || '[]');
+                const bookedRooms = resRooms.data.filter(r => roomIdsArr.includes(String(r.id)));
+
+                if(b.zone_id) {
+                    const zone = resZones.data.find(z => z.id === b.zone_id);
+                    tableBody.innerHTML = `<tr><td class="center">1</td><td><strong>แพ็กเกจ: ${zone.zone_name}</strong><br><span style="font-size: 14pt; color: #64748b;">(${bookedRooms.map(r => r.room_name).join(', ')})</span></td><td class="center">${nights} คืน</td><td class="right">${(zone.package_price * nights).toLocaleString()}</td></tr>`;
+                } else {
+                    bookedRooms.forEach((room, index) => {
+                        tableBody.innerHTML += `<tr><td class="center">${index+1}</td><td><strong>ห้องพัก: ${room.room_name}</strong></td><td class="center">${nights} คืน</td><td class="right">${(room.base_price * nights).toLocaleString()}</td></tr>`;
+                    });
+                }
+
+                // การเงิน
+                const baseTotal = b.total_price + (b.discount_amount || 0);
+                document.getElementById('v-basetotal').innerText = baseTotal.toLocaleString();
+                if(b.discount_amount > 0) {
+                    document.getElementById('v-discount-row').style.display = 'flex';
+                    document.getElementById('v-discount').innerText = `-${b.discount_amount.toLocaleString()}`;
+                }
+                document.getElementById('v-total').innerText = b.total_price.toLocaleString();
+                document.getElementById('v-deposit').innerText = b.deposit.toLocaleString();
+                document.getElementById('v-balance').innerText = (b.total_price - b.deposit).toLocaleString();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('quotation-content').style.display = 'block';
+
+            } catch (err) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // โหลดรูปภาพ 100% ไม่พัง เพราะเอาลิงก์เฟสบุ๊คออกแล้ว
+        function downloadImage() {
+            const el = document.getElementById('quotation-content');
+            const btn = document.querySelector('.btn-blue');
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4"></i> กำลังสร้างรูป...';
+            
+            html2canvas(el, { scale: 2, backgroundColor: "#ffffff" }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Quotation_${document.getElementById('v-name').innerText}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> สำเร็จ!';
+                setTimeout(() => { btn.innerHTML = '<i data-lucide="image" class="w-4 h-4"></i> โหลดรูปภาพ'; lucide.createIcons(); }, 2000);
+            }).catch(err => {
+                alert('เกิดข้อผิดพลาดในการสร้างรูปภาพ');
+                btn.innerHTML = '<i data-lucide="image" class="w-4 h-4"></i> โหลดรูปภาพ';
+                lucide.createIcons();
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
