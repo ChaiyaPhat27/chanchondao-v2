@@ -161,9 +161,8 @@ function BookingForm({
 
   const onCheckIn = (ci: string) => {
     if (!ci) return set({ checkIn: ci })
-    // วันออกต้องหลังวันเข้าเสมอ (คงจำนวนคืนเดิมไว้)
-    const keep = Math.max(1, nights)
-    set({ checkIn: ci, checkOut: form.checkOut > ci ? form.checkOut : addDays(ci, keep) })
+    // เลื่อนวันออกตามไปด้วย คงจำนวนคืนเดิมไว้ (ลงย้อนหลังแล้วจะได้ไม่กลายเป็นพักยาวหลายเดือนจนชนทุกห้อง)
+    set({ checkIn: ci, checkOut: addDays(ci, Math.max(1, nights)) })
   }
 
   const toggleRoom = (id: number) =>

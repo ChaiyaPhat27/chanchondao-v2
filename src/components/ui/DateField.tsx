@@ -17,31 +17,26 @@ type Props = {
 /**
  * ช่องวันที่/เวลาที่แสดงรูปแบบเดียวกันทุกเครื่อง (วัน/เดือน/ปี พ.ศ. และ 24 ชม.)
  * ช่อง <input type="date"> ปกติจะแสดงตามภาษาเครื่อง เช่น เดือน/วัน/ปี บนเครื่องที่ตั้งเป็นอังกฤษ
- * จึงซ่อนช่องจริงไว้ แล้วเปิดตัวเลือกวันที่ของเครื่องเมื่อแตะ
+ * จึงวางช่องจริงแบบโปร่งใสทับไว้ด้านบน ให้นิ้วแตะโดนช่องจริงเสมอ
+ * (บางเครื่อง เช่น iPhone เปิดตัวเลือกด้วยโค้ดไม่ได้ ต้องแตะที่ช่องจริงเท่านั้น)
+ * เลือกวันย้อนหลังหรือล่วงหน้าได้ทุกวัน เว้นแต่จะกำหนด min/max
  */
 function PickerField({ type, display, placeholder, icon, ...p }: Props & { type: 'date' | 'time'; display: string; placeholder: string; icon: ReactNode }) {
   const ref = useRef<HTMLInputElement>(null)
+  // คอมพิวเตอร์: คลิกตรงไหนก็เปิดปฏิทิน (ไม่ต้องเล็งไอคอนเล็ก ๆ) ถ้าเปิดไม่ได้ก็ปล่อยให้เครื่องจัดการเอง
   const open = () => {
-    const el = ref.current
-    if (!el) return
     try {
-      el.showPicker()
+      ref.current?.showPicker()
     } catch {
-      el.focus()
-      el.click()
+      /* เครื่องที่ไม่รองรับจะเปิดตัวเลือกเองจากการแตะ */
     }
   }
   return (
-    <span className="relative block">
-      <button
-        type="button"
-        onClick={open}
-        aria-label={p['aria-label']}
-        className={cn(control, 'flex h-12 items-center justify-between gap-2 text-left', p.className)}
-      >
+    <span className="group relative block">
+      <span aria-hidden className={cn(control, 'flex h-12 items-center justify-between gap-2 text-left group-hover:ring-slate-300 group-focus-within:ring-2 group-focus-within:ring-brand-500', p.className)}>
         <span className={cn('num truncate', !p.value && 'text-slate-400')}>{p.value ? display : placeholder}</span>
         <span className="shrink-0 text-slate-400 [&>svg]:size-4.5">{icon}</span>
-      </button>
+      </span>
       <input
         ref={ref}
         type={type}
@@ -49,10 +44,17 @@ function PickerField({ type, display, placeholder, icon, ...p }: Props & { type:
         min={p.min}
         max={p.max}
         required={p.required}
-        onChange={(e) => p.onChange(e.target.value)}
-        tabIndex={-1}
-        aria-hidden
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+        aria-label={p['aria-label']}
+        onClick={open}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            open()
+          }
+        }}
+        // เครื่องบางรุ่นมีปุ่ม "ล้าง" ในตัวเลือก ไม่ให้ช่องที่จำเป็นกลายเป็นค่าว่าง
+        onChange={(e) => (e.target.value || !p.required ? p.onChange(e.target.value) : undefined)}
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
     </span>
   )

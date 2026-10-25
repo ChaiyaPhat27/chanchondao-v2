@@ -223,7 +223,18 @@ export function AtvPage() {
         )}
       </Card>
 
-      <AtvEntryDialog target={target} onClose={() => setTarget(null)} onDelete={onDelete} />
+      <AtvEntryDialog
+        target={target}
+        onClose={() => setTarget(null)}
+        onDelete={onDelete}
+        // ลงย้อนหลัง/ล่วงหน้านอกช่วงที่ดูอยู่ → เปิดเดือนของรายการนั้นให้เห็นทันที
+        onSaved={(e) => {
+          if (e.date >= start && e.date <= end) return
+          const from = e.date.slice(0, 8) + '01'
+          const monthEnd = endOfMonth(from)
+          setRange(from, from === monthStart ? today : monthEnd)
+        }}
+      />
       <ExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}

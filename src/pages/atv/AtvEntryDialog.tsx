@@ -49,9 +49,12 @@ export function AtvEntryDialog({
   target,
   onClose,
   onDelete,
+  onSaved,
 }: {
   target: AtvTarget
   onClose: () => void
+  /** เรียกหลังบันทึกสำเร็จ (ใช้พาไปดูรายการที่ลงย้อนหลัง) */
+  onSaved?: (e: AtvEntry) => void
   /** คืนค่า true ถ้าลบแล้ว */
   onDelete: (e: AtvEntry) => Promise<boolean>
 }) {
@@ -92,8 +95,9 @@ export function AtvEntryDialog({
         photoConsent: form.type === 'income' ? form.photoConsent : null,
       },
       {
-        onSuccess: () => {
+        onSuccess: (entry) => {
           toast.success(editing ? 'บันทึกการแก้ไขแล้ว' : 'ลงบัญชีแล้ว')
+          onSaved?.(entry)
           onClose()
         },
         onError: toastError('บันทึกบัญชี'),
